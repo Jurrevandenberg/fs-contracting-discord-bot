@@ -2,7 +2,7 @@
   {
     "field": 103,
     "area": 5.6,
-    "notes": "Soon to be harvested October/November @Tyggr181",
+    "notes": "Soon to be harvested October/November",
     "tasks": []
   },
   {
@@ -19,7 +19,7 @@
       {
         "name": "harvesting (no straw)",
         "reward": 18700,
-        "status": "completed",
+        "status": "available",
         "claimedBy": null
       },
       {
@@ -46,14 +46,7 @@
     "field": 106,
     "area": 8.67,
     "notes": "",
-    "tasks": [
-      {
-        "name": "if needed spraying (herbicide)",
-        "reward": 21700,
-        "status": "available",
-        "claimedBy": null
-      }
-    ]
+    "tasks": []
   },
   {
     "field": 107,
@@ -63,7 +56,7 @@
       {
         "name": "fertilizing (manure or slurry)",
         "reward": 8100,
-        "status": "completed",
+        "status": "available",
         "claimedBy": null
       },
       {
@@ -88,8 +81,8 @@
       {
         "name": "cultivating",
         "reward": 23300,
-        "status": "available",
-        "claimedBy": null
+        "status": "claimed",
+        "claimedBy": "254554841542688768"
       },
       {
         "name": "after cultivating seeding (wheat if possible before winter)",
@@ -123,12 +116,6 @@
     "area": 5.44,
     "notes": "to be harvested in July",
     "tasks": [
-      {
-        "name": "baling and storing the straw",
-        "reward": 16300,
-        "status": "available",
-        "claimedBy": null
-      },
       {
         "name": "after baling cultivating",
         "reward": 15500,
@@ -235,20 +222,7 @@
     "field": 116,
     "area": 5.75,
     "notes": "to be done in august",
-    "tasks": [
-      {
-        "name": "Seeding (canola)",
-        "reward": 20100,
-        "status": "available",
-        "claimedBy": null
-      },
-      {
-        "name": "during or after seeding fertilizing (solid)",
-        "reward": 16400,
-        "status": "available",
-        "claimedBy": null
-      }
-    ]
+    "tasks": []
   },
   {
     "field": 188,
