@@ -198,10 +198,11 @@ client.on(Events.InteractionCreate, async interaction => {
     // Handle slash commands
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
-        // Only allow users with MANAGE_GUILD permission
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
-            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
-            return;
+        if (commandName === 'addcontract' || commandName === 'addtask' || commandName === 'setupcontracts') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
+                await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+                return;
+            }
         }
         if (commandName === 'addcontract') {
             const field = interaction.options.getInteger('field');
