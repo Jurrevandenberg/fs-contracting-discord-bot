@@ -48,7 +48,7 @@ let contractMessageId = null;
 let contractMessageChannelId = null;
 
 // Helper to build the contract list embed (modern, compact, table-like UX)
-function buildContractEmbed(contracts, userId = null) {
+function buildContractEmbed(contracts, userId = null, guild = null) {
     const embed = new EmbedBuilder()
         .setTitle('Farming Simulator Contracts')
         .setDescription('**Legend:** 🟢 Available | 🟡 Claimed | ✅ Completed\nOne contract task per farm at a time.')
@@ -59,8 +59,18 @@ function buildContractEmbed(contracts, userId = null) {
         contract.tasks.forEach((task, idx) => {
             let status = task.status === 'available' ? '🟢' : task.status === 'claimed' ? '🟡' : '✅';
             let reward = `**${task.reward.toLocaleString()} €**`;
-            let claimed = (task.status === 'claimed' && task.claimedBy) ? ` (claimed by <@${task.claimedBy}>)` : '';
-            lines.push(`${status} **${task.name}** — ${reward}${claimed}`);
+            let extra = '';
+            if (task.status === 'claimed' && task.claimedBy) {
+                extra = ` (claimed by <@${task.claimedBy}>)`;
+            } else if (task.status === 'completed' && task.completedBy) {
+                let displayName = task.completedBy;
+                if (guild) {
+                    const member = guild.members.cache.get(task.completedBy);
+                    if (member) displayName = member.displayName;
+                }
+                extra = ` (completed by ${displayName})`;
+            }
+            lines.push(`${status} **${task.name}** — ${reward}${extra}`);
             // Add a blank line after each task except the last
             if (idx < contract.tasks.length - 1) {
                 lines.push('');
@@ -80,7 +90,7 @@ function buildContractEmbed(contracts, userId = null) {
 }
 
 // Helper to update the contract list message
-async function updateContractMessage(guild, userId = null) {
+async function updateContractMessage(guild, userId = null, guildForEmbed = null) {
     const contracts = readContracts();
     let channel;
     if (contractMessageChannelId) {
@@ -97,16 +107,16 @@ async function updateContractMessage(guild, userId = null) {
     if (contractMessageId) {
         try {
             message = await channel.messages.fetch(contractMessageId);
-            await message.edit({ embeds: [buildContractEmbed(contracts, userId)], components: buildContractButtons(contracts, userId) });
+            await message.edit({ embeds: [buildContractEmbed(contracts, userId, guildForEmbed)], components: buildContractButtons(contracts, userId) });
         } catch (e) {
             // If message not found, send a new one
-            message = await channel.send({ embeds: [buildContractEmbed(contracts, userId)], components: buildContractButtons(contracts, userId) });
+            message = await channel.send({ embeds: [buildContractEmbed(contracts, userId, guildForEmbed)], components: buildContractButtons(contracts, userId) });
             contractMessageId = message.id;
             contractMessageChannelId = channel.id;
             saveContractMessageInfo(channel.id, message.id);
         }
     } else {
-        message = await channel.send({ embeds: [buildContractEmbed(contracts, userId)], components: buildContractButtons(contracts, userId) });
+        message = await channel.send({ embeds: [buildContractEmbed(contracts, userId, guildForEmbed)], components: buildContractButtons(contracts, userId) });
         contractMessageId = message.id;
         contractMessageChannelId = channel.id;
         saveContractMessageInfo(channel.id, message.id);
@@ -246,13 +256,14 @@ client.on(Events.InteractionCreate, async interaction => {
             return;
         }
         task.status = 'completed';
+        task.completedBy = interaction.user.id;
         task.claimedBy = null;
         writeContracts(contracts);
-        if (interaction.guild) await updateContractMessage(interaction.guild, interaction.user.id);
-        // Notify payout role
+        if (interaction.guild) await updateContractMessage(interaction.guild, interaction.user.id, interaction.guild);
+        // Notify payout role, include user mention
         const payoutRole = interaction.guild.roles.cache.get(PAYOUT_ROLE_ID);
         const payoutMention = payoutRole ? `<@&${PAYOUT_ROLE_ID}>` : 'Payout team';
-        await interaction.reply({ content: `Task completed! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID] }, ephemeral: true });
+        await interaction.reply({ content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }, ephemeral: true });
         return;
     }
 
@@ -305,13 +316,14 @@ client.on(Events.InteractionCreate, async interaction => {
                 for (const [tIdx, task] of contract.tasks.entries()) {
                     if (task.status === 'claimed' && task.claimedBy === interaction.user.id) {
                         task.status = 'completed';
+                        task.completedBy = interaction.user.id;
                         task.claimedBy = null;
                         writeContracts(contracts);
-                        if (interaction.guild) await updateContractMessage(interaction.guild, interaction.user.id);
-                        // Notify payout role
+                        if (interaction.guild) await updateContractMessage(interaction.guild, interaction.user.id, interaction.guild);
+                        // Notify payout role, include user mention
                         const payoutRole = interaction.guild.roles.cache.get(PAYOUT_ROLE_ID);
                         const payoutMention = payoutRole ? `<@&${PAYOUT_ROLE_ID}>` : 'Payout team';
-                        await interaction.reply({ content: `Task completed! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID] } });
+                        await interaction.reply({ content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }, ephemeral: true });
                         found = true;
                         break;
                     }
@@ -375,6 +387,7 @@ client.on(Events.InteractionCreate, async interaction => {
             }
             task.status = 'available';
             task.claimedBy = null;
+            task.completedBy = null;
             writeContracts(contracts);
             if (interaction.guild) await updateContractMessage(interaction.guild);
             await interaction.reply({ content: `Task reopened: Field ${contract.field} - ${task.name}`, ephemeral: true });
