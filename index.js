@@ -63,12 +63,7 @@ function buildContractEmbed(contracts, userId = null, guild = null) {
             if (task.status === 'claimed' && task.claimedBy) {
                 extra = ` (claimed by <@${task.claimedBy}>)`;
             } else if (task.status === 'completed' && task.completedBy) {
-                let displayName = task.completedBy;
-                if (guild) {
-                    const member = guild.members.cache.get(task.completedBy);
-                    if (member) displayName = member.displayName;
-                }
-                extra = ` (completed by ${displayName})`;
+                extra = ` (completed by <@${task.completedBy}>)`;
             }
             lines.push(`${status} **${task.name}** — ${reward}${extra}`);
             // Add a blank line after each task except the last
@@ -241,30 +236,59 @@ client.once('ready', async () => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-    // 1. Handle private 'Complete' button using indices FIRST
+    
     if (interaction.isButton() && interaction.customId.startsWith('complete_private_')) {
-        const [, , cIdx, tIdx] = interaction.customId.split('_');
-        let contracts = readContracts();
-        const contract = contracts[parseInt(cIdx)];
-        if (!contract) {
-            await interaction.reply({ content: 'Contract not found.', ephemeral: true });
-            return;
+        try {
+            const [, , cIdx, tIdx] = interaction.customId.split('_');
+            let contracts = readContracts();
+            const contract = contracts[parseInt(cIdx)];
+    
+            if (!contract) {
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: 'Contract not found.', ephemeral: true });
+                }
+                return;
+            }
+    
+            const task = contract.tasks[parseInt(tIdx)];
+            if (!task || task.status !== 'claimed' || task.claimedBy !== interaction.user.id) {
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: 'You can only complete tasks you have claimed.', ephemeral: true });
+                }
+                return;
+            }
+    
+            task.status = 'completed';
+            task.completedBy = interaction.user.id;
+            task.claimedBy = null;
+            writeContracts(contracts);
+    
+            if (interaction.guild) {
+                await updateContractMessage(interaction.guild, interaction.user.id, interaction.guild);
+            }
+    
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.deferUpdate();
+            }
+    
+            // Notify payout role
+            const payoutRole = interaction.guild.roles.cache.get(PAYOUT_ROLE_ID);
+            const payoutMention = payoutRole ? `<@&${PAYOUT_ROLE_ID}>` : 'Payout team';
+    
+            const channel = await interaction.guild.channels.fetch(CONTRACT_CHANNEL_ID);
+            if (channel) {
+                await channel.send({ 
+                    content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, 
+                    allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }
+                });
+            }
+    
+        } catch (error) {
+            console.error('Error handling task completion interaction:', error);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: 'There was an error completing the task. Please try again.', ephemeral: true });
+            }
         }
-        const task = contract.tasks[parseInt(tIdx)];
-        if (!task || task.status !== 'claimed' || task.claimedBy !== interaction.user.id) {
-            await interaction.reply({ content: 'You can only complete tasks you have claimed.', ephemeral: true });
-            return;
-        }
-        task.status = 'completed';
-        task.completedBy = interaction.user.id;
-        task.claimedBy = null;
-        writeContracts(contracts);
-        if (interaction.guild) await updateContractMessage(interaction.guild, interaction.user.id, interaction.guild);
-        // Notify payout role, include user mention
-        const payoutRole = interaction.guild.roles.cache.get(PAYOUT_ROLE_ID);
-        const payoutMention = payoutRole ? `<@&${PAYOUT_ROLE_ID}>` : 'Payout team';
-        await interaction.reply({ content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }, ephemeral: true });
-        return;
     }
 
     if (interaction.isChatInputCommand()) {
@@ -323,7 +347,16 @@ client.on(Events.InteractionCreate, async interaction => {
                         // Notify payout role, include user mention
                         const payoutRole = interaction.guild.roles.cache.get(PAYOUT_ROLE_ID);
                         const payoutMention = payoutRole ? `<@&${PAYOUT_ROLE_ID}>` : 'Payout team';
-                        await interaction.reply({ content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }, ephemeral: true });
+                        
+                        // Send completion message to the contract channel instead of as ephemeral
+                        const channel = await interaction.guild.channels.fetch(CONTRACT_CHANNEL_ID);
+                        if (channel) {
+                            await channel.send({ 
+                                content: `Task completed by <@${interaction.user.id}>! ${payoutMention} please pay out for Field ${contract.field} - ${task.name} (${task.reward.toLocaleString()} €)`, 
+                                allowedMentions: { roles: [PAYOUT_ROLE_ID], users: [interaction.user.id] }
+                            });
+                        }
+                        
                         found = true;
                         break;
                     }
